@@ -1,0 +1,167 @@
+<canvas width="800" height="480" style="width:800px;height:480px;background-color:#113;" id="a"></canvas>
+<script>
+
+// Canvas --------------------------------------------------------------------*/
+
+var a = document.getElementById('a');
+var c = a.getContext('2d');
+
+// Config --------------------------------------------------------------------*/
+
+var pixelSizeRatio = 4;
+var charPad = 128 - 64;
+
+// Utils ---------------------------------------------------------------------*/
+
+var hashToMap = (hash) => {
+  var zeroPad = num => '00000000'.slice(String(num).length);
+  var h = '';
+  for (var i = 0; i < hash.length; i++) {
+    var num = (hash.charCodeAt(i) - charPad).toString(2);
+    h += zeroPad(num);
+    h += String(num);
+  }
+  return h.split('');
+};
+
+var collides = (a, b) => (
+  Math.pow(
+    Math.pow(a.x - b.x,2) + Math.pow(a.y - b.y,2)
+    ,0.5
+  ) < pixelSizeRatio
+);
+
+var renderTileToBuffer = (entity) => {
+  if (textureCache[entity.texture]) return entity.tile = textureCache[entity.texture];
+  var [pattern, fillA, fillB] = entity.texture.split(',');
+  var pixels = hashToMap(pattern);
+  var tile = new OffscreenCanvas(8 * pixelSizeRatio, pattern.length * pixelSizeRatio)
+  var tileContext = tile.getContext('2d');
+  tileContext.fillStyle = '#' + (fillA || '00000000');
+  tileContext.fillRect(0,0,8 * pixelSizeRatio, pattern.length * pixelSizeRatio);
+  pixels.map((pixel, i) => {
+    if (pixel === '1') tileContext.rect(~~(i/8)*pixelSizeRatio, i%8*pixelSizeRatio, pixelSizeRatio, pixelSizeRatio);
+  });
+  tileContext.fillStyle = '#' + fillB;
+  tileContext.fill();
+  entity.tile = tile;
+  textureCache[entity.texture] = tile;
+};
+
+// Keyboard and mouse mapping ------------------------------------------------*/
+
+var input = {};
+var mouse = {
+  x:0,
+  y:0,
+  down: false,
+};
+
+onmousemove = (evt) => {
+  mouse.x = evt.offsetX;
+  mouse.y = evt.offsetY;
+};
+
+onmouseup = () => {
+  mouse.down = false;
+};
+
+onmousedown = () => {
+  mouse.down = true;
+};
+
+onkeydown = (evt) => input[evt.keyCode] = 1;
+onkeyup = (evt) => {
+    input[evt.keyCode] = 0;
+    if (evt.keyCode == 32) {
+        // Spacebar, shoot maybe ?
+        layers[2].push({ x: 0, y: 0, accX: 1, accY: 0, texture: textures[2], createdAt: frameIndex, animFrame: 0 });
+        renderTileToBuffer(layers[2][layers[2].length -1])
+    }
+};
+
+// To sync animations
+var frameIndex = 0;
+
+/**
+ * 0: right wall
+ * 1: left wall
+ * 2: round bullet, frame 0
+ * 3: round bullet, frame 1
+ * 4: round bullet, frame 2
+ */
+var textures = [
+    '¾Ww[Wko,,0',
+    'ĴĤĘĬĔİİĨ,,0',
+    'XdÙÙdX,,fff',
+    '|åÙÙå|,,fcc',
+    '|ÑĝûÉ|,,fee',
+];
+var textureCache = {};
+
+// 0 = bg, 1 = walls, 2 = bullets, 3 = obstacles, 4 = enemies (hero)
+var layers = [[],[],[],[],[]];
+
+var draw = () => {
+  frameIndex++;
+  if (frameIndex % 300 === 0) frameIndex = 0; // Cycles every 5 seconds
+  setTimeout(draw, 16);
+  a.width = a.width; // Clears the canvas
+
+  updatePlayer();
+
+  updateDecor();
+  updateBullets();
+  updateEnemies();
+
+  layers.map((layer)=>layer.map((entity) => {
+    if (entity.tile) c.drawImage(entity.tile, entity.x, entity.y);
+  }));
+};
+
+var updatePlayer = () => {
+
+};
+
+var updateDecor = () => {
+
+};
+
+var updateBullets = () => {
+  layers[2].map((bullet) => {
+    // Update texture every 5 frames
+    if ((frameIndex - bullet.createdAt) % 5 === 0) {
+        bullet.texture = textures[(++bullet.animFrame%3)+2];
+        renderTileToBuffer(bullet);
+    }
+    // Update location
+    bullet.x += bullet.accX;
+    bullet.y += bullet.accY;
+
+    // Check collisions
+    layers[4].map((enemy) => {
+      if (collides(bullet, enemy)) enemy.killed = true;
+    });
+  });
+};
+
+var updateEnemies = () => {
+  layers[4].map((enemy) => {
+    // Update texture if killed
+    if (enemy.killed && enemy.texture != textures[10]) {
+        enemy.texture = textures[10];
+        renderTileToBuffer(enemy);
+    }
+
+    // If hero in sight and timing of 1s done, switch to shooting stance
+
+    // If in shooting stance for 1s, fire bullet towards hero
+
+    // Check collision with hero
+    if (collides({x:0,y:0}, enemy)) {} // Get damage
+  });
+};
+
+draw();
+
+</script>
