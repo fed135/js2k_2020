@@ -89,7 +89,7 @@ onkeydown = (evt) => {
     // x, shoot
     if (shootLock) return;
     shootLock = true;
-    setTimeout(() => shootLock = false, 400)
+    setTimeout(() => shootLock = false, 200)
     layers[2].push({ x: hero.x+8*pixelSizeRatio, y: hero.y+2*pixelSizeRatio, accX: 3, accY: 0, texture: textures[2], createdAt: frameIndex, animFrame: 0 });
     renderTileToBuffer(layers[2][layers[2].length -1])
   }
@@ -140,6 +140,9 @@ var draw = () => {
   updateDecor();
   updateBullets();
   updateEnemies();
+
+  c.fillStyle='#343'
+  c.fillRect(0, floor+16*pixelSizeRatio, 800, 480-floor);
 
   layers.map((layer)=>layer.map((entity) => {
     if (entity.tile) c.drawImage(entity.tile, entity.x, entity.y);
