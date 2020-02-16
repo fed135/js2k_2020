@@ -9,6 +9,9 @@ var c = a.getContext('2d');
 // Config --------------------------------------------------------------------*/
 
 var pixelSizeRatio = 4;
+var maxAcceleration = 3;
+var floor = 350;
+var heroCenter = 180;
 var charPad = 128 - 64;
 
 // Utils ---------------------------------------------------------------------*/
@@ -40,13 +43,21 @@ var renderTileToBuffer = (entity) => {
   tileContext.fillStyle = '#' + (fillA || '00000000');
   tileContext.fillRect(0,0,8 * pixelSizeRatio, pattern.length * pixelSizeRatio);
   pixels.map((pixel, i) => {
-    if (pixel === '1') tileContext.rect(~~(i/8)*pixelSizeRatio, i%8*pixelSizeRatio, pixelSizeRatio, pixelSizeRatio);
+    if (pixel == '1') tileContext.rect(~~(i/8)*pixelSizeRatio, i%8*pixelSizeRatio, pixelSizeRatio, pixelSizeRatio);
   });
   tileContext.fillStyle = '#' + fillB;
   tileContext.fill();
   entity.tile = tile;
   textureCache[entity.texture] = tile;
 };
+
+// Game state ----------------------------------------------------------------*/
+
+var hero = { life: 3, x: heroCenter, y: floor, accX: 0, accY: 0, animFrame: 0 };
+var camera = { xOffset: 0, lockedAt: 0 };
+var shootLock = false;
+// 0 = bg, 1 = walls, 2 = bullets, 3 = obstacles, 4 = enemies (hero)
+var layers = [[],[],[],[],[]];
 
 // Keyboard and mouse mapping ------------------------------------------------*/
 
@@ -70,15 +81,20 @@ onmousedown = () => {
   mouse.down = true;
 };
 
-onkeydown = (evt) => input[evt.keyCode] = 1;
-onkeyup = (evt) => {
-    input[evt.keyCode] = 0;
-    if (evt.keyCode == 32) {
-        // Spacebar, shoot maybe ?
-        layers[2].push({ x: 0, y: 0, accX: 1, accY: 0, texture: textures[2], createdAt: frameIndex, animFrame: 0 });
-        renderTileToBuffer(layers[2][layers[2].length -1])
-    }
+onkeydown = (evt) => {
+  input[evt.keyCode] = 1;
+  // spacebar, jump
+  if (evt.keyCode == 32 && !hero.inJump && !hero.inLanding) hero.jumpStart = true;
+  if (evt.keyCode == 88) {
+    // x, shoot
+    if (shootLock) return;
+    shootLock = true;
+    setTimeout(() => shootLock = false, 400)
+    layers[2].push({ x: hero.x+8*pixelSizeRatio, y: hero.y+2*pixelSizeRatio, accX: 3, accY: 0, texture: textures[2], createdAt: frameIndex, animFrame: 0 });
+    renderTileToBuffer(layers[2][layers[2].length -1])
+  }
 };
+onkeyup = (evt) => input[evt.keyCode] = 0;
 
 // To sync animations
 var frameIndex = 0;
@@ -89,6 +105,13 @@ var frameIndex = 0;
  * 2: round bullet, frame 0
  * 3: round bullet, frame 1
  * 4: round bullet, frame 2
+ * 5: hero layer 0, frame 0
+ * 6: hero layer 0, frame 1
+ * 7: hero layer 0, frame 2
+ * 8: hero layer 1, frame 0
+ * 9: hero layer 1, frame 1
+ * 10: hero layer 1, frame 2
+ * 11: hero layer 0, jump frame 0
  */
 var textures = [
     '¾Ww[Wko,,0',
@@ -96,15 +119,19 @@ var textures = [
     'XdÙÙdX,,fff',
     '|åÙÙå|,,fcc',
     '|ÑĝûÉ|,,fee',
+    '^^^~|¸¼¿¿~\\||¶ĦĦ,,fb5',
+    '@||||¼¿¿¾||||ttt,,fb5',
+    '@^^~~¾¼¿¿¾||||\\\\,,fb5',
+    '^XXpp°°³±p@@@@ĂĦ,,000',
+    '@|p`` ³± `@@@@t~,,000',
+    '@|p``°³¡ `@@@¼¼,,000',
+    '~~~¾½¿¿¾|||~¾¸@@,,fb5',
 ];
 var textureCache = {};
 
-// 0 = bg, 1 = walls, 2 = bullets, 3 = obstacles, 4 = enemies (hero)
-var layers = [[],[],[],[],[]];
-
 var draw = () => {
   frameIndex++;
-  if (frameIndex % 300 === 0) frameIndex = 0; // Cycles every 5 seconds
+  if (frameIndex % 300 == 0) frameIndex = 0; // Cycles every 5 seconds
   setTimeout(draw, 16);
   a.width = a.width; // Clears the canvas
 
@@ -117,20 +144,81 @@ var draw = () => {
   layers.map((layer)=>layer.map((entity) => {
     if (entity.tile) c.drawImage(entity.tile, entity.x, entity.y);
   }));
+  //hero.tiles.map(tile => c.drawImage(tile, entity.x, entity.y));
+  c.drawImage(hero.tile, hero.x, hero.y, 8*pixelSizeRatio, 16*pixelSizeRatio);
+  c.strokeStyle = 'red';
+  c.beginPath()
+  c.rect(hero.x, hero.y, 8*pixelSizeRatio, 16*pixelSizeRatio)
+  c.stroke()
 };
 
 var updatePlayer = () => {
+  // Update texture every 6 frames
+  if (frameIndex % 6 == 0 || !hero.texture) {
+    hero.texture = textures[(++hero.animFrame%3)+5];
+    renderTileToBuffer(hero);
+  }
 
+  // Update position
+  hero.y += hero.accY;
+  camera.lockedAt += Math.max(hero.accX, 0);
+  camera.xOffset += hero.accX;
+  hero.x = camera.xOffset - camera.lockedAt + heroCenter;
+  if (hero.x < 0) hero.x = 0;
+
+  if (hero.jumpStart && hero.texture != textures[11]) {
+    hero.accX *= 1.1;
+    hero.texture = textures[11];
+    renderTileToBuffer(hero);
+    hero.accY = -10;
+    hero.inJump = true;
+    hero.jumpStart = false;
+  }
+  else if (hero.inJump) {
+    hero.accY *= 0.95;
+    hero.accX *= 0.9;
+    if (hero.accY >= -0.7) {
+      hero.inJump = false;
+      hero.inLanding = true;
+      hero.accY = 2;
+    }
+  }
+  else {
+    if (hero.inLanding) {
+      hero.accY *= 1.05;
+      if (hero.y >= floor) {
+        hero.y = floor;
+        hero.accY = 0;
+        hero.inLanding = false;
+      }
+    }
+    if (input[77] == '1') {
+      if (hero.accX > 0) {
+        hero.accX = 0;
+        hero.scaleX = -1;
+      }
+      hero.accX = Math.max(hero.accX - 0.1, -maxAcceleration);
+    }
+    if (input[78] == '1') {
+      if (hero.accX < 0) {
+        hero.accX = 0;
+        hero.scaleX = 1;
+      }
+      hero.accX = Math.min(hero.accX + 0.1, maxAcceleration);
+    }
+  }
 };
 
 var updateDecor = () => {
-
+  if (~~camera.offsetX % 1000 === 0) {
+    // spawn monster
+  }
 };
 
 var updateBullets = () => {
   layers[2].map((bullet) => {
     // Update texture every 5 frames
-    if ((frameIndex - bullet.createdAt) % 5 === 0) {
+    if ((frameIndex - bullet.createdAt) % 5 == 0) {
         bullet.texture = textures[(++bullet.animFrame%3)+2];
         renderTileToBuffer(bullet);
     }
