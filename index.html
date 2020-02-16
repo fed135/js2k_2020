@@ -31,7 +31,7 @@ var collides = (a, b) => (
   Math.pow(
     Math.pow(a.x - b.x,2) + Math.pow(a.y - b.y,2)
     ,0.5
-  ) < pixelSizeRatio
+  ) < (pixelSizeRatio * 7)
 );
 
 var renderTileToBuffer = (entity) => {
@@ -53,7 +53,7 @@ var renderTileToBuffer = (entity) => {
 
 // Game state ----------------------------------------------------------------*/
 
-var hero = { life: 3, x: heroCenter, y: floor, accX: 2, accY: 0, animFrame: 0 };
+var hero = { life: 3, x: heroCenter, y: floor, accX: maxAcceleration, accY: 0, animFrame: 0 };
 var camera = { xOffset: 0, lockedAt: 0 };
 var shootLock = false;
 // 0 = bg, 1 = walls, 2 = bullets, 3 = obstacles, 4 = enemies (hero)
@@ -89,8 +89,8 @@ onkeydown = (evt) => {
     // x, shoot
     if (shootLock) return;
     shootLock = true;
-    setTimeout(() => shootLock = false, 200)
-    layers[2].push({ x: hero.x+8*pixelSizeRatio, y: hero.y+2*pixelSizeRatio, accX: 3, accY: 0, texture: textures[2], createdAt: frameIndex, animFrame: 0 });
+    setTimeout(() => shootLock = false, 500)
+    layers[2].push({ x: hero.x+8*pixelSizeRatio, y: hero.y+2*pixelSizeRatio, accX: 5, accY: 0, texture: textures[2], createdAt: frameIndex, animFrame: 0 });
     renderTileToBuffer(layers[2][layers[2].length -1])
   }
 };
@@ -100,7 +100,7 @@ onkeyup = (evt) => input[evt.keyCode] = 0;
 var frameIndex = 0;
 
 /**
- * 0: floor tile, broken
+ * 0: monster, frame0
  * 1: floor tile, straight
  * 2: round bullet, frame 0
  * 3: round bullet, frame 1
@@ -112,9 +112,10 @@ var frameIndex = 0;
  * 9: hero layer 1, frame 1
  * 10: hero layer 1, frame 2
  * 11: hero layer 0, jump frame 0
+ * 12: monster, dead
  */
 var textures = [
-    'ÐqjĊi,,000',
+    '¼ľïïĿĿ,,fff',
     'ĿÈÈÈĿbbb,,000',
     'XdÙÙdX,,fff',
     '|åÙÙå|,,fcc',
@@ -126,6 +127,7 @@ var textures = [
     '@|p`` ³± `@@@@t~,,000',
     '@|p``°³¡ `@@@¼¼,,000',
     '~~~¾½¿¿¾|||~¾¸@@,,fb5',
+    '¼ľ÷Ŀ,,666'
 ];
 var textureCache = {};
 var floorTexture = { texture: textures[1] };
@@ -162,38 +164,39 @@ var updatePlayer = () => {
   hero.y += hero.accY;
   camera.lockedAt += Math.max(hero.accX, 0);
   camera.xOffset += hero.accX;
-  hero.x = camera.xOffset - camera.lockedAt + heroCenter;
+  /*hero.x = camera.xOffset - camera.lockedAt + heroCenter;
   if (hero.x < 0) {
     hero.x = 0;
     hero.accX += 0.1;
-  }
+  }*/
 
   if (hero.jumpStart && hero.texture != textures[11]) {
-    hero.accX *= 1.1;
+    hero.accX = 2;
     hero.texture = textures[11];
     renderTileToBuffer(hero);
-    hero.accY = -10;
+    hero.accY = -20;
     hero.inJump = true;
     hero.jumpStart = false;
   }
   else if (hero.inJump) {
-    hero.accY *= 0.95;
-    hero.accX *= 0.9;
-    if (hero.accY >= -0.7) {
+    hero.accY *= 0.9;
+    if (hero.accY >= -1) {
       hero.inJump = false;
       hero.inLanding = true;
-      hero.accY = 2;
+      hero.accY = 3;
     }
   }
   else {
     if (hero.inLanding) {
-      hero.accY *= 1.05;
+      hero.accY *= 1.1;
       if (hero.y >= floor) {
         hero.y = floor;
+        hero.accX = maxAcceleration;
         hero.accY = 0;
         hero.inLanding = false;
       }
     }
+    /*
     if (input[37] == '1') {
       if (hero.accX > 0) {
         hero.accX = 0;
@@ -208,14 +211,11 @@ var updatePlayer = () => {
       }
       hero.accX = Math.min(hero.accX + 0.1, maxAcceleration);
     }
+    */
   }
 };
 
 var updateDecor = () => {
-  if (~~camera.offsetX % 1000 === 0) {
-    // spawn monster
-  }
-
   c.fillStyle='#343';
   c.fillRect(0, floor+16*pixelSizeRatio, 800, 480-floor);
   c.fillStyle=floorPattern;
@@ -226,7 +226,7 @@ var updateDecor = () => {
 };
 
 var updateBullets = () => {
-  layers[2].map((bullet) => {
+  layers[2].map((bullet, i, l) => {
     // Update texture every 5 frames
     if ((frameIndex - bullet.createdAt) % 5 == 0) {
         bullet.texture = textures[(++bullet.animFrame%3)+2];
@@ -238,25 +238,40 @@ var updateBullets = () => {
 
     // Check collisions
     layers[4].map((enemy) => {
-      if (collides(bullet, enemy)) enemy.killed = true;
+      if (collides(bullet, enemy)) {
+        enemy.killed = true;
+        l.splice(i,1);
+      }
     });
   });
 };
 
 var updateEnemies = () => {
+  if (~~camera.offsetX % 100 == ~~(Math.random()*100)) {
+    // spawn monster
+    layers[4].push({x:800, y: Math.random() * (floor - 64) + 100, texture: textures[0] })
+    renderTileToBuffer(layers[4][layers[4].length -1])
+  }
+
   layers[4].map((enemy) => {
     // Update texture if killed
-    if (enemy.killed && enemy.texture != textures[10]) {
-        enemy.texture = textures[10];
+    if (enemy.killed) {
+        enemy.texture = textures[12];
         renderTileToBuffer(enemy);
+        enemy.y+=4;
+        return;
     }
+
+    enemy.x -= 3
 
     // If hero in sight and timing of 1s done, switch to shooting stance
 
     // If in shooting stance for 1s, fire bullet towards hero
 
     // Check collision with hero
-    if (collides({x:0,y:0}, enemy)) {} // Get damage
+    if (collides(hero, enemy)) {
+      alert('game over')
+    } // Get damage
   });
 };
 
