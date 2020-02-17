@@ -54,7 +54,7 @@ var renderTileToBuffer = (entity) => {
 // Game state ----------------------------------------------------------------*/
 
 var hero = { life: 3, x: heroCenter, y: floor, accX: maxAcceleration, accY: 0, animFrame: 0, dead: false };
-var camera = { xOffset: 0, lockedAt: 0 };
+var camera = { xOffset: 0 };
 var shootLock = false;
 var bonus = 0;
 // 0 = bg, 1 = walls, 2 = bullets, 3 = obstacles, 4 = enemies (hero)
@@ -111,6 +111,7 @@ var frameIndex = 0;
  * 7: hero layer 0, frame 2
  * 8: heart
  * 9: monster, dead
+ * 10: floor obstacle
  */
 var textures = [
     '¼ľïïĿĿ,,fff',
@@ -123,29 +124,35 @@ var textures = [
     '@^^~~¾¼¿¿¾||||\\\\,,fb5',
     '¬ľľľ¼xP@,,f00',
     '¼ľ÷Ŀ,,666',
+    '@@@PHDfo¾Ŀ,,fff'
 
 ];
 var textureCache = {};
 var floorTexture = { texture: textures[1] };
 renderTileToBuffer(floorTexture);
 var floorPattern = c.createPattern(floorTexture.tile, 'repeat');
+const lifeTexture = { texture: textures[8] };
+renderTileToBuffer(lifeTexture);
 
 var draw = () => {
-  if (!hero.dead) {
-    frameIndex++;
-    if (frameIndex % 300 == 0) frameIndex = 0; // Cycles every 5 seconds
-    setTimeout(draw, 16);
-    a.width = a.width; // Clears the canvas
+  frameIndex++;
+  if (frameIndex % 300 == 0) frameIndex = 0; // Cycles every 5 seconds
+  setTimeout(draw, 16);
+  a.width = a.width; // Clears the canvas
 
-    updatePlayer();
-    updateDecor();
-    updateBullets();
-    updateEnemies();
+  updatePlayer();
+  updateDecor();
+  updateBullets();
+  updateEnemies();
 
-    layers.map((layer)=>layer.map((entity) => {
-      if (entity.tile) c.drawImage(entity.tile, entity.x, entity.y);
-    }));
-    c.drawImage(hero.tile, hero.x, hero.y, 8*pixelSizeRatio, 16*pixelSizeRatio);
+  layers.map((layer)=>layer.map((entity) => {
+    if (entity.tile) c.drawImage(entity.tile, entity.x, entity.y);
+  }));
+  if (!hero.dead) c.drawImage(hero.tile, hero.x, hero.y, 8*pixelSizeRatio, 16*pixelSizeRatio);
+  else {
+    hero.y = -1000;
+    hero.accX = 0;
+    c.fillText('GAME OVER', floor, heroCenter)
   }
 };
 
@@ -158,13 +165,9 @@ var updatePlayer = () => {
 
   // Update position
   hero.y += hero.accY;
-  camera.lockedAt += Math.max(hero.accX, 0);
   camera.xOffset += hero.accX;
 
   if (hero.jumpStart && hero.texture != textures[11]) {
-    hero.accX = 2;
-    hero.texture = textures[11];
-    renderTileToBuffer(hero);
     hero.accY = -20;
     hero.inJump = true;
     hero.jumpStart = false;
@@ -182,7 +185,6 @@ var updatePlayer = () => {
       hero.accY *= 1.1;
       if (hero.y >= floor) {
         hero.y = floor;
-        hero.accX = maxAcceleration;
         hero.accY = 0;
         hero.inLanding = false;
       }
@@ -201,6 +203,10 @@ var updateDecor = () => {
   c.font = '20px impact';
   c.fillStyle = '#fff'
   c.fillText(~~(camera.xOffset+bonus), 5*pixelSizeRatio, 5*pixelSizeRatio);
+  
+  for(var i = 0; i< hero.life; i++) {
+    c.drawImage(lifeTexture.tile, 80 + (i * 8 * pixelSizeRatio), 80)
+  }
 };
 
 var updateBullets = () => {
@@ -220,19 +226,26 @@ var updateBullets = () => {
         enemy.killed = true;
         bonus += 100;
         l.splice(i,1);
+        if (bonus % 1000 === 0) hero.life++;
       }
     });
   });
 };
 
 var updateEnemies = () => {
-  if (~~camera.offsetX % 100 == ~~(Math.random()*80)) {
+  if (~~camera.offsetX % 80 == ~~(Math.random()*80)) {
     // spawn monster
     layers[4].push({x:800, y: Math.random() * (floor - 100) + 100, texture: textures[0], createdAt: frameIndex })
     renderTileToBuffer(layers[4][layers[4].length -1])
   }
 
-  layers[4].map((enemy) => {
+  if (~~camera.offsetX % 100 == ~~(Math.random()*100)) {
+    // spawn floor obstacle
+    layers[3].push({x:800, y: floor + 6 * pixelSizeRatio, texture: textures[10] })
+    renderTileToBuffer(layers[3][layers[3].length -1])
+  }
+
+  [...layers[4], ...layers[3]].map((enemy) => {
     // Update texture if killed
     if (enemy.killed) {
         enemy.texture = textures[9];
@@ -242,11 +255,12 @@ var updateEnemies = () => {
     }
 
     enemy.x -= 3;
-    enemy.y += Math.sin(enemy.x/20) * ((enemy.createdAt % 4) * pixelSizeRatio)
+    if (enemy.createdAt) enemy.y += Math.sin(enemy.x/20) * ((enemy.createdAt % 4) * pixelSizeRatio)
 
     // Check collision with hero
     if (collides(hero, enemy)) {
-      hero.dead=true
+      if (--hero.life<1) hero.dead=true
+      enemy.killed = true;
     } // Get damage
   });
 };
