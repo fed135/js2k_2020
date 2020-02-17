@@ -109,11 +109,8 @@ var frameIndex = 0;
  * 5: hero layer 0, frame 0
  * 6: hero layer 0, frame 1
  * 7: hero layer 0, frame 2
- * 8: hero layer 1, frame 0
- * 9: hero layer 1, frame 1
- * 10: hero layer 1, frame 2
- * 11: hero layer 0, jump frame 0
- * 12: monster, dead
+ * 8: heart
+ * 9: monster, dead
  */
 var textures = [
     '¼ľïïĿĿ,,fff',
@@ -124,11 +121,9 @@ var textures = [
     '^^^~|¸¼¿¿~\\||¶ĦĦ,,fb5',
     '@||||¼¿¿¾||||ttt,,fb5',
     '@^^~~¾¼¿¿¾||||\\\\,,fb5',
-    '^XXpp°°³±p@@@@ĂĦ,,000',
-    '@|p`` ³± `@@@@t~,,000',
-    '@|p``°³¡ `@@@¼¼,,000',
-    '~~~¾½¿¿¾|||~¾¸@@,,fb5',
-    '¼ľ÷Ŀ,,666'
+    '¬ľľľ¼xP@,,f00',
+    '¼ľ÷Ŀ,,666',
+
 ];
 var textureCache = {};
 var floorTexture = { texture: textures[1] };
@@ -240,7 +235,7 @@ var updateEnemies = () => {
   layers[4].map((enemy) => {
     // Update texture if killed
     if (enemy.killed) {
-        enemy.texture = textures[12];
+        enemy.texture = textures[9];
         renderTileToBuffer(enemy);
         enemy.y+=4;
         return;
