@@ -53,9 +53,10 @@ var renderTileToBuffer = (entity) => {
 
 // Game state ----------------------------------------------------------------*/
 
-var hero = { life: 3, x: heroCenter, y: floor, accX: maxAcceleration, accY: 0, animFrame: 0 };
+var hero = { life: 3, x: heroCenter, y: floor, accX: maxAcceleration, accY: 0, animFrame: 0, dead: false };
 var camera = { xOffset: 0, lockedAt: 0 };
 var shootLock = false;
+var bonus = 0;
 // 0 = bg, 1 = walls, 2 = bullets, 3 = obstacles, 4 = enemies (hero)
 var layers = [[],[],[],[],[]];
 
@@ -89,7 +90,7 @@ onkeydown = (evt) => {
     // x, shoot
     if (shootLock) return;
     shootLock = true;
-    setTimeout(() => shootLock = false, 500)
+    setTimeout(() => shootLock = false, 550)
     layers[2].push({ x: hero.x+8*pixelSizeRatio, y: hero.y+2*pixelSizeRatio, accX: 5, accY: 0, texture: textures[2], createdAt: frameIndex, animFrame: 0 });
     renderTileToBuffer(layers[2][layers[2].length -1])
   }
@@ -135,22 +136,22 @@ renderTileToBuffer(floorTexture);
 var floorPattern = c.createPattern(floorTexture.tile, 'repeat');
 
 var draw = () => {
-  frameIndex++;
-  if (frameIndex % 300 == 0) frameIndex = 0; // Cycles every 5 seconds
-  setTimeout(draw, 16);
-  a.width = a.width; // Clears the canvas
+  if (!hero.dead) {
+    frameIndex++;
+    if (frameIndex % 300 == 0) frameIndex = 0; // Cycles every 5 seconds
+    setTimeout(draw, 16);
+    a.width = a.width; // Clears the canvas
 
-  updatePlayer();
+    updatePlayer();
+    updateDecor();
+    updateBullets();
+    updateEnemies();
 
-  updateDecor();
-  updateBullets();
-  updateEnemies();
-
-  layers.map((layer)=>layer.map((entity) => {
-    if (entity.tile) c.drawImage(entity.tile, entity.x, entity.y);
-  }));
-  //hero.tiles.map(tile => c.drawImage(tile, entity.x, entity.y));
-  c.drawImage(hero.tile, hero.x, hero.y, 8*pixelSizeRatio, 16*pixelSizeRatio);
+    layers.map((layer)=>layer.map((entity) => {
+      if (entity.tile) c.drawImage(entity.tile, entity.x, entity.y);
+    }));
+    c.drawImage(hero.tile, hero.x, hero.y, 8*pixelSizeRatio, 16*pixelSizeRatio);
+  }
 };
 
 var updatePlayer = () => {
@@ -164,11 +165,6 @@ var updatePlayer = () => {
   hero.y += hero.accY;
   camera.lockedAt += Math.max(hero.accX, 0);
   camera.xOffset += hero.accX;
-  /*hero.x = camera.xOffset - camera.lockedAt + heroCenter;
-  if (hero.x < 0) {
-    hero.x = 0;
-    hero.accX += 0.1;
-  }*/
 
   if (hero.jumpStart && hero.texture != textures[11]) {
     hero.accX = 2;
@@ -196,22 +192,6 @@ var updatePlayer = () => {
         hero.inLanding = false;
       }
     }
-    /*
-    if (input[37] == '1') {
-      if (hero.accX > 0) {
-        hero.accX = 0;
-        hero.scaleX = -1;
-      }
-      hero.accX = Math.max(hero.accX - 0.1, -maxAcceleration);
-    }
-    if (input[39] == '1') {
-      if (hero.accX < 0) {
-        hero.accX = 0;
-        hero.scaleX = 1;
-      }
-      hero.accX = Math.min(hero.accX + 0.1, maxAcceleration);
-    }
-    */
   }
 };
 
@@ -223,6 +203,9 @@ var updateDecor = () => {
   c.translate(-(camera.xOffset % (8*pixelSizeRatio)), 0);
   c.fillRect(0, floor+16*pixelSizeRatio, 800, 480-floor);
   c.restore();
+  c.font = '20px impact';
+  c.fillStyle = '#fff'
+  c.fillText(~~(camera.xOffset+bonus), 5*pixelSizeRatio, 5*pixelSizeRatio);
 };
 
 var updateBullets = () => {
@@ -240,6 +223,7 @@ var updateBullets = () => {
     layers[4].map((enemy) => {
       if (collides(bullet, enemy)) {
         enemy.killed = true;
+        bonus += 100;
         l.splice(i,1);
       }
     });
@@ -247,9 +231,9 @@ var updateBullets = () => {
 };
 
 var updateEnemies = () => {
-  if (~~camera.offsetX % 100 == ~~(Math.random()*100)) {
+  if (~~camera.offsetX % 100 == ~~(Math.random()*80)) {
     // spawn monster
-    layers[4].push({x:800, y: Math.random() * (floor - 64) + 100, texture: textures[0] })
+    layers[4].push({x:800, y: Math.random() * (floor - 100) + 100, texture: textures[0], createdAt: frameIndex })
     renderTileToBuffer(layers[4][layers[4].length -1])
   }
 
@@ -262,15 +246,12 @@ var updateEnemies = () => {
         return;
     }
 
-    enemy.x -= 3
-
-    // If hero in sight and timing of 1s done, switch to shooting stance
-
-    // If in shooting stance for 1s, fire bullet towards hero
+    enemy.x -= 3;
+    enemy.y += Math.sin(enemy.x/20) * ((enemy.createdAt % 4) * pixelSizeRatio)
 
     // Check collision with hero
     if (collides(hero, enemy)) {
-      alert('game over')
+      hero.dead=true
     } // Get damage
   });
 };
