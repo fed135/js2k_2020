@@ -54,7 +54,7 @@ var renderTileToBuffer = (entity) => {
 // Game state ----------------------------------------------------------------*/
 
 var hero = { life: 3, x: heroCenter, y: floor, accX: maxAcceleration, accY: 0, animFrame: 0, dead: false };
-var camera = { xOffset: 0 };
+var xOffset = 0;
 var shootLock = false;
 var bonus = 0;
 // 0 = bg, 1 = walls, 2 = bullets, 3 = obstacles, 4 = enemies (hero)
@@ -62,40 +62,18 @@ var layers = [[],[],[],[],[]];
 
 // Keyboard and mouse mapping ------------------------------------------------*/
 
-var input = {};
-var mouse = {
-  x:0,
-  y:0,
-  down: false,
-};
-
-onmousemove = (evt) => {
-  mouse.x = evt.offsetX;
-  mouse.y = evt.offsetY;
-};
-
-onmouseup = () => {
-  mouse.down = false;
-};
-
-onmousedown = () => {
-  mouse.down = true;
-};
-
 onkeydown = (evt) => {
-  input[evt.keyCode] = 1;
   // spacebar, jump
   if (evt.keyCode == 32 && !hero.inJump && !hero.inLanding) hero.jumpStart = true;
   if (evt.keyCode == 88) {
     // x, shoot
     if (shootLock) return;
     shootLock = true;
-    setTimeout(() => shootLock = false, 550)
+    setTimeout(() => shootLock = false, 388)
     layers[2].push({ x: hero.x+8*pixelSizeRatio, y: hero.y+2*pixelSizeRatio, accX: 5, accY: 0, texture: textures[2], createdAt: frameIndex, animFrame: 0 });
     renderTileToBuffer(layers[2][layers[2].length -1])
   }
 };
-onkeyup = (evt) => input[evt.keyCode] = 0;
 
 // To sync animations
 var frameIndex = 0;
@@ -165,9 +143,9 @@ var updatePlayer = () => {
 
   // Update position
   hero.y += hero.accY;
-  camera.xOffset += hero.accX;
+  xOffset += hero.accX;
 
-  if (hero.jumpStart && hero.texture != textures[11]) {
+  if (hero.jumpStart) {
     hero.accY = -20;
     hero.inJump = true;
     hero.jumpStart = false;
@@ -197,12 +175,12 @@ var updateDecor = () => {
   c.fillRect(0, floor+16*pixelSizeRatio, 800, 480-floor);
   c.fillStyle=floorPattern;
   c.save();
-  c.translate(-(camera.xOffset % (8*pixelSizeRatio)), 0);
-  c.fillRect(0, floor+16*pixelSizeRatio, 800, 480-floor);
+  c.translate(-(xOffset % (8*pixelSizeRatio)), 0);
+  c.fillRect(0, floor+16*pixelSizeRatio, 880, 480-floor);
   c.restore();
   c.font = '20px impact';
   c.fillStyle = '#fff'
-  c.fillText(~~(camera.xOffset+bonus), 5*pixelSizeRatio, 5*pixelSizeRatio);
+  c.fillText(~~(xOffset+bonus), 5*pixelSizeRatio, 5*pixelSizeRatio);
   
   for(var i = 0; i< hero.life; i++) {
     c.drawImage(lifeTexture.tile, 80 + (i * 8 * pixelSizeRatio), 80)
@@ -233,13 +211,13 @@ var updateBullets = () => {
 };
 
 var updateEnemies = () => {
-  if (~~camera.offsetX % 80 == ~~(Math.random()*80)) {
+  if (~~xOffset % 100 == ~~(Math.random()*100)) {
     // spawn monster
     layers[4].push({x:800, y: Math.random() * (floor - 100) + 100, texture: textures[0], createdAt: frameIndex })
     renderTileToBuffer(layers[4][layers[4].length -1])
   }
 
-  if (~~camera.offsetX % 100 == ~~(Math.random()*100)) {
+  if (~~xOffset % 100 == ~~(Math.random()*100)) {
     // spawn floor obstacle
     layers[3].push({x:800, y: floor + 6 * pixelSizeRatio, texture: textures[10] })
     renderTileToBuffer(layers[3][layers[3].length -1])
